@@ -23,11 +23,17 @@ static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64;
  */
 int parse_uri(char *uri, char *target_addr, char *path, int  *port);
 void format_log_entry(char *logstring, struct sockaddr_in *sockaddr, char *uri, int size);
+void processRequester(int fd);
 
 /* 
  * main - Main routine for the proxy program 
  */
 int main(int argc, char **argv){
+    int listenfd, connfd;
+    char hostname[MAXLINE], port[MAXLINE];
+    socklen_t clientlen;
+    struct sockaddr_storage clientaddr;
+
 
     /* Check arguments */
     if (argc != 2) {
@@ -35,10 +41,33 @@ int main(int argc, char **argv){
 	exit(0);
     }
 
-    printf("%s", user_agent_hdr);
+    listenfd = Open_listenfd(argv[1]);
+    while (1) {
+        clientlen = sizeof(clientaddr);
+        connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);           //line:netp:tiny:accept
+            Getnameinfo((SA *) &clientaddr, clientlen, hostname, MAXLINE, 
+                        port, MAXLINE, 0);
+            printf("Accepted connection from (%s, %s)\n", hostname, port);
+        processRequester(connfd);                                             //line:netp:tiny:doit
+        Close(connfd);                                                      //line:netp:tiny:close
+    }
+
+
+
+
     return 0;
 }
 
+
+/*
+ * processRequester - handles the connection after it is established.
+ *
+ * Given a connection from listenfd
+ * 
+ */
+void processRequester(int fd){
+
+}
 
 /*
  * parse_uri - URI parser
@@ -95,6 +124,7 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
 		      char *uri, int size){
     time_t now;
     char time_str[MAXLINE];
+    char browserIP[MAXLINE];
     unsigned long host;
     unsigned char a, b, c, d;
 
@@ -115,5 +145,9 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
 
     // for the student to do...
 
+    snprintf(logstring, MAXLINE, "%s %s %s %s", time_str, browserIP, host, size);
+
+
+    return;
 }
 
