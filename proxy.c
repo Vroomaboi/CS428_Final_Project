@@ -7,10 +7,6 @@
  * 
  * This code is a proxy program in which functions a premetive logging
  * and firewall middle man for processing http requests.
- * 
- * IMPORTANT: Give a high level description of your code here. You
- * must also provide a header comment at the beginning of each
- * function that describes what that function does.
  */ 
 
 #include "csapp.h"
