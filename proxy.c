@@ -2,8 +2,11 @@
  * proxy.c - CS:APP Web proxy
  *
  * TEAM MEMBERS:  put your name(s) and e-mail addresses here
- *     Howard the Duck, howie@duck.sewanee.edu
- *     James Q. Pleebus, pleebles@q.sewanee.edu
+ *     Garrett Parker, parkegp0@sewanee.edu
+ *     Michael Komnick, komnimj0@sewanee.edu
+ * 
+ * This code is a proxy program in which functions a premetive logging
+ * and firewall middle man for processing http requests.
  * 
  * IMPORTANT: Give a high level description of your code here. You
  * must also provide a header comment at the beginning of each
@@ -28,8 +31,7 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr, char *uri, 
 /* 
  * main - Main routine for the proxy program 
  */
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv){
 
     /* Check arguments */
     if (argc != 2) {
@@ -50,8 +52,7 @@ int main(int argc, char **argv)
  * pathname must already be allocated and should be at least MAXLINE
  * bytes. Return -1 if there are any problems.
  */
-int parse_uri(char *uri, char *hostname, char *pathname, int *port)
-{
+int parse_uri(char *uri, char *hostname, char *pathname, int *port){
     char *hostbegin;
     char *hostend;
     char *pathbegin;
@@ -95,8 +96,7 @@ int parse_uri(char *uri, char *hostname, char *pathname, int *port)
  * of the response from the server (size).
  */
 void format_log_entry(char *logstring, struct sockaddr_in *sockaddr, 
-		      char *uri, int size)
-{
+		      char *uri, int size){
     time_t now;
     char time_str[MAXLINE];
     unsigned long host;
