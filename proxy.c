@@ -24,6 +24,7 @@ static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64;
 int parse_uri(char *uri, char *target_addr, char *path, int  *port);
 void format_log_entry(char *logstring, struct sockaddr_in *sockaddr, char *uri, int size);
 void processRequester(int fd);
+void sigchld_handler(int sig);
 
 /* 
  * main - Main routine for the proxy program 
@@ -34,22 +35,24 @@ int main(int argc, char **argv){
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;
 
-
     /* Check arguments */
     if (argc != 2) {
-	fprintf(stderr, "Usage: %s <port number>\n", argv[0]);
-	exit(0);
+        fprintf(stderr, "Usage: %s <port number>\n", argv[0]);
+        exit(0);
     }
 
+    Signal(SIGCHLD, sigchld_handler);
     listenfd = Open_listenfd(argv[1]);
     while (1) {
         clientlen = sizeof(clientaddr);
-        connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);           //line:netp:tiny:accept
+        connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen); 
+        if(Fork() == 0){
             Getnameinfo((SA *) &clientaddr, clientlen, hostname, MAXLINE, 
                         port, MAXLINE, 0);
             printf("Accepted connection from (%s, %s)\n", hostname, port);
-        processRequester(connfd);                                             //line:netp:tiny:doit
-        Close(connfd);                                                      //line:netp:tiny:close
+            processRequester(connfd);                                            
+            exit(0);
+        }
     }
 
 
@@ -66,7 +69,29 @@ int main(int argc, char **argv){
  * 
  */
 void processRequester(int fd){
+    int is_static;
+    struct stat sbuf;
+    char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
+    char filename[MAXLINE], cgiargs[MAXLINE];
+    rio_t rio;
 
+    /* Read request line and headers */
+    Rio_readinitb(&rio, fd);
+    if (!Rio_readlineb(&rio, buf, MAXLINE))  //line:netp:doit:readrequest
+        return;
+    printf("%s", buf);
+    sscanf(buf, "%s %s %s", method, uri, version);       //line:netp:doit:parserequest
+    if (strcasecmp(method, "GET")) {                     //line:netp:doit:beginrequesterr
+        printf("error: in request");
+        return;
+    }                                                    //line:netp:doit:endrequesterr
+    read_requesthdrs(&rio);
+
+}
+
+void sigchld_handler(int sig){ 
+    while(waitpid(-1, 0, WNOHANG) > 0);
+    return; 
 }
 
 /*
@@ -84,8 +109,8 @@ int parse_uri(char *uri, char *hostname, char *pathname, int *port){
     int len;
 
     if (strncasecmp(uri, "http://", 7) != 0) {
-	hostname[0] = '\0';
-	return -1;
+        hostname[0] = '\0';
+        return -1;
     }
        
     /* Extract the host name */
@@ -98,16 +123,16 @@ int parse_uri(char *uri, char *hostname, char *pathname, int *port){
     /* Extract the port number */
     *port = 80; /* default */
     if (*hostend == ':')   
-	*port = atoi(hostend + 1);
+	    *port = atoi(hostend + 1);
     
     /* Extract the path */
     pathbegin = strchr(hostbegin, '/');
     if (pathbegin == NULL) {
-	pathname[0] = '\0';
+	    pathname[0] = '\0';
     }
     else {
-	pathbegin++;	
-	strcpy(pathname, pathbegin);
+        pathbegin++;	
+        strcpy(pathname, pathbegin);
     }
 
     return 0;
@@ -124,7 +149,7 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
 		      char *uri, int size){
     time_t now;
     char time_str[MAXLINE];
-    char browserIP[MAXLINE];
+    char url[MAXLINE];
     unsigned long host;
     unsigned char a, b, c, d;
 
@@ -141,11 +166,16 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
 
     // for the student to do...
     
+    
     /* Finally, store (and return) the formatted log entry string in logstring */
 
     // for the student to do...
 
-    snprintf(logstring, MAXLINE, "%s %s %s %s", time_str, browserIP, host, size);
+    //gets URL from uri
+    parse_uri(uri,url,NULL,NULL);
+
+    //creates final string
+    snprintf(logstring, MAXLINE, "%s %s %s %s", time_str, host, url, size);
 
 
     return;
