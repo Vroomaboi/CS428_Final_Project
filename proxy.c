@@ -24,6 +24,7 @@ static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64;
 int parse_uri(char *uri, char *target_addr, char *path, int  *port);
 void format_log_entry(char *logstring, struct sockaddr_in *sockaddr, char *uri, int size);
 void *thread(void *vargp);
+void read_requesthdrs(rio_t *rp) ;
 
 /* 
  * main - Main routine for the proxy program 
@@ -100,6 +101,18 @@ void *thread(void *vargp) {
     return NULL;
 }
 
+
+void read_requesthdrs(rio_t *rp) {
+    char buf[MAXLINE];
+
+    Rio_readlineb(rp, buf, MAXLINE);
+    printf("%s", buf);
+    while(strcmp(buf, "\r\n")) {          //line:netp:readhdrs:checkterm
+	Rio_readlineb(rp, buf, MAXLINE);
+	printf("%s", buf);
+    }
+    return;
+}
 
 /*
  * parse_uri - URI parser
@@ -182,9 +195,9 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
     parse_uri(uri,url,NULL,NULL);
 
     //creates final string
-    snprintf(logstring, MAXLINE, "%s %s %s %s", time_str, host, url, size);
+    snprintf(logstring, MAXLINE, "%s %ld %s %d", time_str, host, url, size);
 
 
-    return NULL;
+    return;
 }
 
