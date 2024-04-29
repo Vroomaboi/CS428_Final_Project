@@ -35,14 +35,17 @@ void clienterror(int fd, char *cause, char *errnum,
 void readBlocklist();
 char **blockList;
 
+// Semaphore to protect the log file writing
+volatile long cnt = 0;
+sem_t mutex;
+
 /* 
  * main - Main routine for the proxy program 
  */
 int main(int argc, char **argv){
-    readBlocklist();
+    Sem_init(&mutex, 0, 1);
 
-    // FILE *logptr;
-    // logptr = fopen("proxy.log", "w");
+    readBlocklist();
 
     int listenfd, *connfdp;
     char hostname[MAXLINE], port[MAXLINE];
@@ -73,8 +76,6 @@ int main(int argc, char **argv){
         }
         free(blockList);
     }
-
-    // fclose(logptr);
 
     return 0;
 }
@@ -237,7 +238,13 @@ void *thread(void *vargp) {
     // Logging the response
     char logString[MAXLINE];
     format_log_entry(logString, requestfd, uri, response_size);
-    printf("LOG TEST: %s\n", logString);
+    P(&mutex);
+    FILE *logptr;
+    logptr = fopen("proxy.log", "a");
+    fprintf(logptr, logString);
+    fclose(logptr);
+    V(&mutex);
+    printf("LOG TEST: %s", logString);
 
     // Closing the connections
     close(requestfd);
@@ -352,7 +359,7 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
     // snprintf(portStr, sizeof(portStr), "%d", *port);
 
     //creates final string
-    snprintf(logstring, MAXLINE, "%s %s %s %d", time_str, host, uri, size);
+    snprintf(logstring, MAXLINE, "[%s] %s %s %d\n", time_str, host, uri, size);
 
     return logstring;
 }
