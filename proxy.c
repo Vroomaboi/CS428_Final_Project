@@ -43,21 +43,20 @@ sem_t mutex;
  * main - Main routine for the proxy program 
  */
 int main(int argc, char **argv){
-    Sem_init(&mutex, 0, 1);
-
-    readBlocklist();
-
-    int listenfd, *connfdp;
-    char hostname[MAXLINE], port[MAXLINE];
-    socklen_t clientlen;
-    struct sockaddr_storage clientaddr;
-    pthread_t tid;
-
     /* Check arguments */
     if (argc != 2) {
         fprintf(stderr, "Usage: %s <port number>\n", argv[0]);
         exit(0);
     }
+
+    Sem_init(&mutex, 0, 1);
+
+    readBlocklist();
+
+    int listenfd, *connfdp;
+    socklen_t clientlen;
+    struct sockaddr_storage clientaddr;
+    pthread_t tid;
 
     listenfd = Open_listenfd(argv[1]);
     while (1) {
@@ -80,12 +79,17 @@ int main(int argc, char **argv){
     return 0;
 }
 
+
+/* 
+ * readBlocklist - Read from file to create a simple firewall 
+ * that prevents access to certain sites.
+ */
 void readBlocklist() {
     char *path = "blocklist";
     FILE *fp = fopen(path, "r");
     if(fp == NULL) {
         printf("WARNING:\nThe blocklist file either doesn't exist or cannot be opened.\n");
-        return NULL;
+        return;
     }
 
     int num_lines = 1;
@@ -135,15 +139,12 @@ void *thread(void *vargp) {
     Pthread_detach(pthread_self());
     free(vargp);
 
-    struct stat sbuf;
-    char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-    char filename[MAXLINE], pathname[MAXLINE], srcf[MAXLINE];
-    int *port = Malloc(sizeof(int)); 
-
-    rio_t rio, rioB;
-    int requestfd;
-    char request[MAXLINE];
-
+    char buf[MAXLINE], method[MAXLINE], 
+         uri[MAXLINE], version[MAXLINE],
+         filename[MAXLINE], pathname[MAXLINE], 
+         request[MAXLINE];
+    int requestfd, *port = Malloc(sizeof(int)); 
+    rio_t rio;
 
     /* Read request line and headers */
 
@@ -227,24 +228,24 @@ void *thread(void *vargp) {
     //     printf("Error sending response to client!\n");
     // }
 
-    size_t response_len = 0;
+    size_t rLen = 0;
     int n;
     while((n = rio_readn(requestfd, buf, MAXLINE)) > 0) {
-        response_len += n;
+        rLen += n;
         if(rio_writen(connfd, buf, strlen(buf)) != strlen(buf)) {
             printf("Error sending response to client!\n");
         }
         bzero(buf, MAXLINE);
     }
-    int response_size = response_len * 8;
+    int rSize = rLen * 8;
 
     // Logging the response
     char logString[MAXLINE];
-    format_log_entry(logString, requestfd, uri, response_size);
+    format_log_entry(logString, requestfd, uri, rSize);
     P(&mutex);
     FILE *logptr;
     logptr = fopen("proxy.log", "a");
-    fprintf(logptr, logString);
+    fprintf(logptr, "%s",logString);
     fclose(logptr);
     V(&mutex);
     printf("LOG TEST: %s", logString);
@@ -366,7 +367,7 @@ void format_log_entry(char *logstring, int fd, char *uri, int size) {
     //creates final string
     snprintf(logstring, MAXLINE, "[%s] %s %s %d\n", time_str, host, uri, size);
 
-    return logstring;
+    return;
 }
 
 /*
