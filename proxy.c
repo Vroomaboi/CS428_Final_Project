@@ -134,11 +134,10 @@ void *thread(void *vargp) {
 
     struct stat sbuf;
     char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-    char filename[MAXLINE], pathname[MAXLINE];
+    char filename[MAXLINE], pathname[MAXLINE], srcf[MAXLINE];
     int *port = Malloc(sizeof(int)); 
 
     rio_t rio, rioB;
-    char *srcf;
     int requestfd;
     char request[MAXLINE];
 
@@ -160,7 +159,7 @@ void *thread(void *vargp) {
     printf("%s", buf);
     sscanf(buf, "%s %s %s", method, uri, version);       //line:netp:doit:parserequest
     if (strcasecmp(method, "GET")) {                     //line:netp:doit:beginrequesterr
-        printf("error: in request");
+        printf("error: in request\n");
         return NULL;
     }                                                    //line:netp:doit:endrequesterr
     parse_uri(uri, filename, pathname, port); 
@@ -190,15 +189,21 @@ void *thread(void *vargp) {
     requestfd = Open_clientfd(filename, test);
 
     //change to use http 1.0
-    snprintf(request, sizeof(request),"%s /%s %s \n",method, pathname, "HTTP/1.0" );
-    Rio_writen(requestfd, request, strlen(buf));
-
+    snprintf(request, sizeof(request),"%s /%s %s \r\n\r\n",method, pathname, "HTTP/1.0" );
+    Rio_writen(requestfd, request, strlen(request));
+  
 
     //recieve info
-    /* Rio_readinitb(&rioB, requestfd);
-    if (!Rio_readlineb(&rio, srcf, MAXLINE))  //line:netp:doit:readrequest
-        return NULL;
-    Close(requestfd); */
+   
+    strcpy(buf,"");
+    for (size_t i = 0; Rio_readn(requestfd, srcf, MAXLINE) > 0; i++){
+        strcat(buf,srcf);
+    }
+    
+    printf("%s",buf);
+    Rio_writen(connfd, buf, strlen(buf));
+
+    Close(requestfd);
 
     //sends data recieved from server to client
     //Rio_writen(connfd, srcf, strlen(srcf)); 
