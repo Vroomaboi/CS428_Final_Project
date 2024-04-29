@@ -23,17 +23,17 @@ static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64;
  */
 int parse_uri(char *uri, char *target_addr, char *path, int  *port);
 void format_log_entry(char *logstring, struct sockaddr_in *sockaddr, char *uri, int size);
-void processRequester(int fd);
-void sigchld_handler(int sig);
+void *thread(void *vargp);
 
 /* 
  * main - Main routine for the proxy program 
  */
 int main(int argc, char **argv){
-    int listenfd, connfd;
+    int listenfd, *connfdp;
     char hostname[MAXLINE], port[MAXLINE];
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;
+    pthread_t tid;
 
     /* Check arguments */
     if (argc != 2) {
@@ -41,18 +41,12 @@ int main(int argc, char **argv){
         exit(0);
     }
 
-    Signal(SIGCHLD, sigchld_handler);
     listenfd = Open_listenfd(argv[1]);
     while (1) {
         clientlen = sizeof(clientaddr);
-        connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen); 
-        if(Fork() == 0){
-            Getnameinfo((SA *) &clientaddr, clientlen, hostname, MAXLINE, 
-                        port, MAXLINE, 0);
-            printf("Accepted connection from (%s, %s)\n", hostname, port);
-            processRequester(connfd);                                            
-            exit(0);
-        }
+        connfdp = Malloc(sizeof(int));
+        *connfdp = Accept(listenfd, (SA *)&clientaddr, &clientlen); 
+        Pthread_create(&tid, NULL, thread, connfdp);
     }
 
 
@@ -61,38 +55,51 @@ int main(int argc, char **argv){
     return 0;
 }
 
-
 /*
- * processRequester - handles the connection after it is established.
+ * *thread - handles the connection after it is established.
  *
  * Given a connection from listenfd
  * 
  */
-void processRequester(int fd){
+void *thread(void *vargp) {
+    int connfd = *((int *)vargp);
+    Pthread_detach(pthread_self());
+    Free(vargp);
+    // echo(connfd);
+
     int is_static;
     struct stat sbuf;
     char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
     char filename[MAXLINE], cgiargs[MAXLINE];
     rio_t rio;
 
+    /*
+        Important Note from Dr. Carl:
+
+        The Rio readn, Rio readlineb, and Rio writen error checking wrappers in
+        csapp.c are not appropriate for a realistic proxy because they
+        terminate the process when they encounter an error. Your proxy should
+        be more forgiving. Use the regular RIO routines (lower case first
+        letter) for reading and writing. IF you encounter an error reading or
+        writing to a socket, simply close it.
+    */
+
     /* Read request line and headers */
-    Rio_readinitb(&rio, fd);
+    Rio_readinitb(&rio, connfd);
     if (!Rio_readlineb(&rio, buf, MAXLINE))  //line:netp:doit:readrequest
-        return;
+        return NULL;
     printf("%s", buf);
     sscanf(buf, "%s %s %s", method, uri, version);       //line:netp:doit:parserequest
     if (strcasecmp(method, "GET")) {                     //line:netp:doit:beginrequesterr
         printf("error: in request");
-        return;
+        return NULL;
     }                                                    //line:netp:doit:endrequesterr
     read_requesthdrs(&rio);
 
+    Close(connfd);
+    return NULL;
 }
 
-void sigchld_handler(int sig){ 
-    while(waitpid(-1, 0, WNOHANG) > 0);
-    return; 
-}
 
 /*
  * parse_uri - URI parser
@@ -178,6 +185,6 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
     snprintf(logstring, MAXLINE, "%s %s %s %s", time_str, host, url, size);
 
 
-    return;
+    return NULL;
 }
 
