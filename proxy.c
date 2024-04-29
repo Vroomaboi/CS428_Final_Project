@@ -72,7 +72,8 @@ void *thread(void *vargp) {
     int is_static;
     struct stat sbuf;
     char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-    char filename[MAXLINE], cgiargs[MAXLINE];
+    char filename[MAXLINE], pathname[MAXLINE];
+    int *port = Malloc(sizeof(int)); 
     rio_t rio;
 
     /*
@@ -97,6 +98,8 @@ void *thread(void *vargp) {
         return NULL;
     }                                                    //line:netp:doit:endrequesterr
     read_requesthdrs(&rio);
+    parse_uri(uri, filename, pathname, port); 
+    
 
     Close(connfd);
     return NULL;
