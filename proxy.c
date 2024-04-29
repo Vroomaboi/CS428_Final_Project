@@ -173,7 +173,7 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
     char url[MAXLINE];
     unsigned long host;
     char pathname[MAXLINE];
-    int port; 
+    int *port = Malloc(sizeof(int)); 
 
     /* Get a formatted time string */
     now = time(NULL);
