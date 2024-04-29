@@ -1,2 +1,5 @@
 **/*.o
 **/.DS_Store
+proxy
+tiny/cgi-bin/adder
+tiny/tiny
