@@ -69,12 +69,15 @@ void *thread(void *vargp) {
     Free(vargp);
     // echo(connfd);
 
-    int is_static;
     struct stat sbuf;
     char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
     char filename[MAXLINE], pathname[MAXLINE];
     int *port = Malloc(sizeof(int)); 
-    rio_t rio;
+
+    rio_t rio, rioB;
+    char *srcf;
+    int requestfd;
+    char request[MAXLINE];
 
     /*
         Important Note from Dr. Carl:
@@ -97,10 +100,28 @@ void *thread(void *vargp) {
         printf("error: in request");
         return NULL;
     }                                                    //line:netp:doit:endrequesterr
-    read_requesthdrs(&rio);
     parse_uri(uri, filename, pathname, port); 
-    
+    //printf("%s \n ", filename);
+    read_requesthdrs(&rio);
 
+    //proxy make request
+    char test[100];
+    snprintf(test,sizeof(test),"%d",*port);
+    requestfd = Open_clientfd(filename, test);
+
+    //change to use http 1.0
+    snprintf(request, sizeof(request),"%s /%s %s \n",method, pathname, "HTTP/1.0" );
+    Rio_writen(requestfd, request, strlen(buf));
+
+
+    //recieve info
+    /* Rio_readinitb(&rioB, requestfd);
+    if (!Rio_readlineb(&rio, srcf, MAXLINE))  //line:netp:doit:readrequest
+        return NULL;
+    Close(requestfd); */
+
+    //sends data recieved from server to client
+    //Rio_writen(connfd, srcf, strlen(srcf)); 
     Close(connfd);
     return NULL;
 }
