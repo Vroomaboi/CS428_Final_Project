@@ -80,6 +80,7 @@ void readBlocklist() {
     FILE *fp = fopen(path, "r");
     if(fp == NULL) {
         printf("WARNING:\nThe blocklist file either doesn't exist or cannot be opened.\n");
+        return NULL;
     }
 
     int num_lines = 1;
@@ -127,7 +128,7 @@ void readBlocklist() {
 void *thread(void *vargp) {
     int connfd = *((int *)vargp);
     Pthread_detach(pthread_self());
-    Free(vargp);
+    free(vargp);
 
     struct stat sbuf;
     char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
@@ -138,36 +139,46 @@ void *thread(void *vargp) {
     int requestfd;
     char request[MAXLINE];
 
-    /*
-        Important Note from Dr. Carl:
-
-        The Rio readn, Rio readlineb, and Rio writen error checking wrappers in
-        csapp.c are not appropriate for a realistic proxy because they
-        terminate the process when they encounter an error. Your proxy should
-        be more forgiving. Use the regular RIO routines (lower case first
-        letter) for reading and writing. IF you encounter an error reading or
-        writing to a socket, simply close it.
-    */
 
     /* Read request line and headers */
+
+    // Associating file descriptor with the rio buffer
     Rio_readinitb(&rio, connfd);
-    if (!Rio_readlineb(&rio, buf, MAXLINE))  //line:netp:doit:readrequest
+    
+    // Checking if reading a line into the buffer encountered an error
+    // This was "if(!Rio_readlineb(&rio, buf, MAXLINE)) return NULL;"
+    // This should still work though
+    if (rio_readlineb(&rio, buf, MAXLINE) < 0) {
+        close(connfd);
         return NULL;
+    }
+
+    // This is the client's request that was sent to the proxy
     printf("%s", buf);
-    sscanf(buf, "%s %s %s", method, uri, version);       //line:netp:doit:parserequest
-    if (strcasecmp(method, "GET")) {                     //line:netp:doit:beginrequesterr
-        printf("error: in request\n");
+
+    // Copying the buffer components into their corresponding variables
+    sscanf(buf, "%s %s %s", method, uri, version);
+
+    // Disregarding methods other than GET
+    if (strcasecmp(method, "GET")) {
+        clienterror(
+            connfd,
+            filename,
+            "405",
+            "Method Not Allowed",
+            "This HTTP method is not allowed using this proxy."
+        );
         return NULL;
-    }                                                    //line:netp:doit:endrequesterr
+    }
+
+    // Separating the URI into the filename (aka host), pathname, and port
     parse_uri(uri, filename, pathname, port); 
-    printf("%s\n", filename);
     
     // Filtering out hosts in the blocked list
     if(blockList != NULL) {
         int i = 0;
         while(blockList[i] != NULL) {
             if(strcmp(filename, blockList[i]) == 0) {
-                // Outputting an error page if the host is indeed blocked
                 clienterror(
                     connfd,
                     filename,
@@ -181,33 +192,37 @@ void *thread(void *vargp) {
         }
     }
 
+    // Reading the HTTP request headers into rio
     read_requesthdrs(&rio);
 
-    //proxy make request
-    char test[100];
-    snprintf(test,sizeof(test),"%d",*port);
-    requestfd = Open_clientfd(filename, test);
+    // Proxy make request
+    // Storing the port as a string
+    char portStr[100];
+    snprintf(portStr, sizeof(portStr), "%d", *port);
+    requestfd = Open_clientfd(filename, portStr);
 
-    //change to use http 1.0
-    snprintf(request, sizeof(request),"%s /%s %s \r\n\r\n",method, pathname, "HTTP/1.0" );
-    Rio_writen(requestfd, request, strlen(request));
-  
+    // Sending the request using HTTP 1.0
+    snprintf(request, sizeof(request), "%s /%s %s\r\n\r\n",
+             method, pathname, "HTTP/1.0");
+    if(rio_writen(requestfd, request, strlen(request)) != strlen(request)) {
+        printf("Error sending request to server!\n");
+    }
 
-    //recieve info
-   
+    // Recieveing the response
     strcpy(buf,"");
-    for (size_t i = 0; Rio_readn(requestfd, srcf, MAXLINE) > 0; i++){
+    for (size_t i = 0; rio_readn(requestfd, srcf, MAXLINE) > 0; i++) {
         strcat(buf,srcf);
     }
     
     printf("%s",buf);
-    Rio_writen(connfd, buf, strlen(buf));
+    if(rio_writen(connfd, buf, strlen(buf)) != strlen(buf)) {
+        printf("Error sending response to client!\n");
+    }
 
-    Close(requestfd);
+    // Closing the connections
+    close(requestfd);
+    close(connfd);
 
-    //sends data recieved from server to client
-    //Rio_writen(connfd, srcf, strlen(srcf)); 
-    Close(connfd);
     return NULL;
 }
 
@@ -215,10 +230,13 @@ void *thread(void *vargp) {
 void read_requesthdrs(rio_t *rp) {
     char buf[MAXLINE];
 
-    Rio_readlineb(rp, buf, MAXLINE);
+    // Reading the first header line into the buffer
+    rio_readlineb(rp, buf, MAXLINE);
     printf("%s", buf);
-    while(strcmp(buf, "\r\n")) {          //line:netp:readhdrs:checkterm
-        Rio_readlineb(rp, buf, MAXLINE);
+
+    // Getting the rest of the header lines
+    while(strcmp(buf, "\r\n")) {
+        rio_readlineb(rp, buf, MAXLINE);
         printf("%s", buf);
     }
     return;
@@ -328,11 +346,19 @@ void clienterror(int fd, char *cause, char *errnum, char *msgA, char *msgB) {
 
     /* Print the HTTP response */
     sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, msgA);
-    Rio_writen(fd, buf, strlen(buf));
+    if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
+        printf("Error in sending the client error page!\n");
+    }
     sprintf(buf, "Content-type: text/html\r\n");
-    Rio_writen(fd, buf, strlen(buf));
+    if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
+        printf("Error in sending the client error page!\n");
+    }
     sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
-    Rio_writen(fd, buf, strlen(buf));
-    Rio_writen(fd, body, strlen(body));
+    if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
+        printf("Error in sending the client error page!\n");
+    }
+    if(rio_writen(fd, body, strlen(body)) != strlen(body)) {
+        printf("Error in sending the client error page!\n");
+    }
 }
 /* $end clienterror */
