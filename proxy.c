@@ -80,7 +80,7 @@ void readBlocklist() {
         printf("WARNING:\nThe blocklist file either doesn't exist or cannot be opened.\n");
     }
 
-    int num_lines = 0;
+    int num_lines = 1;
     blockList = malloc(sizeof(blockList[0]) * num_lines);
 
     char *new_line = NULL;
@@ -100,7 +100,7 @@ void readBlocklist() {
         // Check if the allocation was successful
         if (ptr == NULL) {
           fprintf(stderr, "Failed to allocate memory at %s:%d\n", __FILE__, __LINE__);
-          // assert(false);
+        //   assert(false);
         }
         // Overwrite `lines` with the pointer to the new memory region only if realloc() was successful
         blockList = ptr;
@@ -108,7 +108,7 @@ void readBlocklist() {
         // Allocate a copy on the heap
         // so that the array elements don't all point to the same buffer
         // we must remember to free() this later
-        blockList[num_lines] = strdup(new_line);
+        blockList[num_lines - 1] = strdup(new_line);
 
         // Keep track of the size of the array
         num_lines++;
@@ -164,7 +164,24 @@ void *thread(void *vargp) {
         return NULL;
     }                                                    //line:netp:doit:endrequesterr
     parse_uri(uri, filename, pathname, port); 
-    //printf("%s \n ", filename);
+    printf("%s\n", filename);
+    
+    // Filtering out hosts in the blocked list
+    if(blockList != NULL) {
+        // printf("Blocklist is not NULL!\n");
+        int i = 0;
+        while(blockList[i] != NULL) {
+            // printf("Blocked Host: %s\n", blockList[i]);
+            // printf("Strcmp = %d\n", strcmp(filename, blockList[i]));
+            if(strcmp(filename, blockList[i]) == 0) {
+                printf("%s is a blocked host! Connection aborted!\n", filename);
+                Close(connfd);
+                return NULL;
+            }
+            i++;
+        }
+    }
+
     read_requesthdrs(&rio);
 
     //proxy make request
