@@ -235,9 +235,9 @@ void *thread(void *vargp) {
     int response_size = response_len * 8;
 
     // Logging the response
-    // char logString[MAXLINE];
-    // format_log_entry(logString, requestfd, uri, response_size);
-    // printf(logString);
+    char logString[MAXLINE];
+    format_log_entry(logString, requestfd, uri, response_size);
+    printf("LOG TEST: %s\n", logString);
 
     // Closing the connections
     close(requestfd);
@@ -325,7 +325,8 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
 
     /* Get a formatted time string */
     now = time(NULL);
-    strftime(time_str, MAXLINE, "%a %d %b %Y %H:%M:%S %Z", localtime(&now));
+    strftime(time_str, sizeof(time_str), "%a %d %b %Y %H:%M:%S %Z", localtime(&now));
+    // strcpy(time_str, "testing");
 
     /* 
      * Next, convert the IP address in network byte order to dotted decimal
@@ -335,7 +336,9 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
      */
 
     // for the student to do...
-    inet_ntop(AF_INET, &(sockaddr->sin_addr), host, INET_ADDRSTRLEN);
+    // inet_ntop(AF_INET, &(((struct sockaddr_in *) sockaddr)->sin_addr), host, INET_ADDRSTRLEN);
+    strcpy(host, "testhost");
+    // printf("TESTING THE SOCKET IP: %s", &(((struct sockaddr_in *) sockaddr)->sin_addr));
     
     
     /* Finally, store (and return) the formatted log entry string in logstring */
