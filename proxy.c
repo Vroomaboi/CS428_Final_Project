@@ -30,6 +30,7 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
                         char *uri, int size);
 void *thread(void *vargp);
 void read_requesthdrs(rio_t *rp) ;
+void serve_static(int fd, char *filename, int filesize);
 void readBlocklist();
 char **blockList;
 
@@ -91,11 +92,6 @@ void readBlocklist() {
 
         // Resize the array we allocated on the heap
         void *ptr = realloc(blockList, (num_lines + 1) * sizeof(blockList[0]));
-        // Note that this can fail if there isn't enough free memory available
-        // This is also a comparatively expensive operation
-        // so you wouldn't typically do a resize for every single line
-        // Normally you would allocate extra space, wait for it to run out, then reallocate
-        // Either growing by a fixed size, or even doubling the size, each time it gets full
 
         // Check if the allocation was successful
         if (ptr == NULL) {
@@ -107,7 +103,6 @@ void readBlocklist() {
 
         // Allocate a copy on the heap
         // so that the array elements don't all point to the same buffer
-        // we must remember to free() this later
         blockList[num_lines - 1] = strdup(new_line);
 
         // Keep track of the size of the array
@@ -118,6 +113,8 @@ void readBlocklist() {
     free(new_line);
     // Close the file since we're done with it
     fclose(fp);
+
+    return;
 }
 
 /*
@@ -130,7 +127,6 @@ void *thread(void *vargp) {
     int connfd = *((int *)vargp);
     Pthread_detach(pthread_self());
     Free(vargp);
-    // echo(connfd);
 
     struct stat sbuf;
     char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
@@ -167,14 +163,17 @@ void *thread(void *vargp) {
     
     // Filtering out hosts in the blocked list
     if(blockList != NULL) {
-        // printf("Blocklist is not NULL!\n");
         int i = 0;
         while(blockList[i] != NULL) {
-            // printf("Blocked Host: %s\n", blockList[i]);
-            // printf("Strcmp = %d\n", strcmp(filename, blockList[i]));
             if(strcmp(filename, blockList[i]) == 0) {
-                printf("%s is a blocked host! Connection aborted!\n", filename);
-                Close(connfd);
+                // Outputting an error page if the host is indeed blocked
+                clienterror(
+                    connfd,
+                    filename,
+                    "403",
+                    "Blocked Host",
+                    "This website has been blocked as it may be malicious."
+                );
                 return NULL;
             }
             i++;
@@ -313,3 +312,29 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
     return;
 }
 
+/*
+ * clienterror - returns an error message to the client
+ */
+/* $begin clienterror */
+void clienterror(int fd, char *cause, char *errnum, 
+		 char *shortmsg, char *longmsg) 
+{
+    char buf[MAXLINE], body[MAXBUF];
+
+    /* Build the HTTP response body */
+    sprintf(body, "<html><title>Error</title>");
+    sprintf(body, "%s<body bgcolor=""ffffff"">\r\n", body);
+    sprintf(body, "%s%s: %s\r\n", body, errnum, shortmsg);
+    sprintf(body, "%s<p>%s: %s\r\n", body, longmsg, cause);
+    // sprintf(body, "%s<hr><em>The Tiny Web server</em>\r\n", body);
+
+    /* Print the HTTP response */
+    sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, shortmsg);
+    Rio_writen(fd, buf, strlen(buf));
+    sprintf(buf, "Content-type: text/html\r\n");
+    Rio_writen(fd, buf, strlen(buf));
+    sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
+    Rio_writen(fd, buf, strlen(buf));
+    Rio_writen(fd, body, strlen(body));
+}
+/* $end clienterror */
