@@ -30,7 +30,8 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
                         char *uri, int size);
 void *thread(void *vargp);
 void read_requesthdrs(rio_t *rp) ;
-void serve_static(int fd, char *filename, int filesize);
+void clienterror(int fd, char *cause, char *errnum, 
+		 char *shortmsg, char *longmsg);
 void readBlocklist();
 char **blockList;
 
@@ -316,20 +317,17 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
  * clienterror - returns an error message to the client
  */
 /* $begin clienterror */
-void clienterror(int fd, char *cause, char *errnum, 
-		 char *shortmsg, char *longmsg) 
-{
+void clienterror(int fd, char *cause, char *errnum, char *msgA, char *msgB) {
     char buf[MAXLINE], body[MAXBUF];
 
     /* Build the HTTP response body */
     sprintf(body, "<html><title>Error</title>");
     sprintf(body, "%s<body bgcolor=""ffffff"">\r\n", body);
-    sprintf(body, "%s%s: %s\r\n", body, errnum, shortmsg);
-    sprintf(body, "%s<p>%s: %s\r\n", body, longmsg, cause);
-    // sprintf(body, "%s<hr><em>The Tiny Web server</em>\r\n", body);
+    sprintf(body, "%s%s: %s\r\n", body, errnum, msgA);
+    sprintf(body, "%s<p>%s: %s\r\n", body, msgB, cause);
 
     /* Print the HTTP response */
-    sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, shortmsg);
+    sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, msgA);
     Rio_writen(fd, buf, strlen(buf));
     sprintf(buf, "Content-type: text/html\r\n");
     Rio_writen(fd, buf, strlen(buf));
