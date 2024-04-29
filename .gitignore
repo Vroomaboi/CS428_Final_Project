@@ -3,3 +3,4 @@
 proxy
 tiny/cgi-bin/adder
 tiny/tiny
+proxy.log

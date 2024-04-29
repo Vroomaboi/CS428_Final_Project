@@ -41,6 +41,9 @@ char **blockList;
 int main(int argc, char **argv){
     readBlocklist();
 
+    // FILE *logptr;
+    // logptr = fopen("proxy.log", "w");
+
     int listenfd, *connfdp;
     char hostname[MAXLINE], port[MAXLINE];
     socklen_t clientlen;
@@ -65,12 +68,13 @@ int main(int argc, char **argv){
         // Freeing the blocklist
         int i = 0;
         while(blockList[i] != NULL) {
-            // printf("%s\n", blockList[i]);
             free(blockList[i]);
             i++;
         }
         free(blockList);
     }
+
+    // fclose(logptr);
 
     return 0;
 }
@@ -197,7 +201,7 @@ void *thread(void *vargp) {
 
     // Proxy make request
     // Storing the port as a string
-    char portStr[100];
+    char portStr[MAXLINE];
     snprintf(portStr, sizeof(portStr), "%d", *port);
     requestfd = Open_clientfd(filename, portStr);
 
@@ -208,16 +212,32 @@ void *thread(void *vargp) {
         printf("Error sending request to server!\n");
     }
 
-    // Recieveing the response
-    strcpy(buf,"");
-    for (size_t i = 0; rio_readn(requestfd, srcf, MAXLINE) > 0; i++) {
-        strcat(buf,srcf);
-    }
+    // // Recieveing the response
+    // strcpy(buf,"");
+    // for (size_t i = 0; rio_readn(requestfd, srcf, MAXLINE) > 0; i++) {
+    //     strcat(buf,srcf);
+    // }
     
-    printf("%s",buf);
-    if(rio_writen(connfd, buf, strlen(buf)) != strlen(buf)) {
-        printf("Error sending response to client!\n");
+    // printf("%s",buf);
+    // if(rio_writen(connfd, buf, strlen(buf)) != strlen(buf)) {
+    //     printf("Error sending response to client!\n");
+    // }
+
+    size_t response_len = 0;
+    int n;
+    while((n = rio_readn(requestfd, buf, MAXLINE)) > 0) {
+        response_len += n;
+        if(rio_writen(connfd, buf, strlen(buf)) != strlen(buf)) {
+            printf("Error sending response to client!\n");
+        }
+        bzero(buf, MAXLINE);
     }
+    int response_size = response_len * 8;
+
+    // Logging the response
+    // char logString[MAXLINE];
+    // format_log_entry(logString, requestfd, uri, response_size);
+    // printf(logString);
 
     // Closing the connections
     close(requestfd);
@@ -294,14 +314,14 @@ int parse_uri(char *uri, char *hostname, char *pathname, int *port){
  * (sockaddr), the URI from the request (uri), and the size in bytes
  * of the response from the server (size).
  */
-void format_log_entry(char *logstring, struct sockaddr_in *sockaddr, 
-		      char *uri, int size){
+void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
+                      char *uri, int size) {
     time_t now;
     char time_str[MAXLINE];
-    char url[MAXLINE];
-    unsigned long host;
-    char pathname[MAXLINE];
-    int *port = Malloc(sizeof(int)); 
+    // char url[MAXLINE];
+    char host[INET_ADDRSTRLEN];
+    // char pathname[MAXLINE];
+    // int *port = Malloc(sizeof(int)); 
 
     /* Get a formatted time string */
     now = time(NULL);
@@ -315,20 +335,23 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
      */
 
     // for the student to do...
+    inet_ntop(AF_INET, &(sockaddr->sin_addr), host, INET_ADDRSTRLEN);
     
     
     /* Finally, store (and return) the formatted log entry string in logstring */
 
     // for the student to do...
 
-    //gets URL from uri
-    parse_uri(uri,url,pathname,port);
+    // //gets URL from uri
+    // parse_uri(uri, url, pathname, port);
+
+    // char portStr[MAXLINE];
+    // snprintf(portStr, sizeof(portStr), "%d", *port);
 
     //creates final string
-    snprintf(logstring, MAXLINE, "%s %ld %s %d", time_str, host, url, size);
+    snprintf(logstring, MAXLINE, "%s %s %s %d", time_str, host, uri, size);
 
-
-    return;
+    return logstring;
 }
 
 /*
