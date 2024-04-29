@@ -182,7 +182,7 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
     parse_uri(uri,url,NULL,NULL);
 
     //creates final string
-    snprintf(logstring, MAXLINE, "%s %s %s %s", time_str, host, url, size);
+    snprintf(logstring, MAXLINE, "%s %ld %s %d", time_str, host, url, size);
 
 
     return NULL;
