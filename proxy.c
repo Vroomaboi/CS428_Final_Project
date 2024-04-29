@@ -207,6 +207,13 @@ void *thread(void *vargp) {
     snprintf(portStr, sizeof(portStr), "%d", *port);
     if((requestfd = open_clientfd(filename, portStr)) < 0) {
         printf("Error opeining connection to %s\n", uri);
+        clienterror(
+                    connfd,
+                    filename,
+                    "404",
+                    "Failure to find page",
+                    "This server might be down or page doesn't exist."
+                   );
         return NULL;
     }
 
