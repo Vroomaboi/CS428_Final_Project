@@ -10,10 +10,14 @@
  */ 
 
 #include "csapp.h"
+#include <sys/stat.h>
 
 /* Recommended max cache and object sizes */
 #define MAX_CACHE_SIZE 1049000
 #define MAX_OBJECT_SIZE 102400
+
+// For reading in the blocklist line by line
+#define BUFFER_SIZE_BYTES 255
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
@@ -26,11 +30,15 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
                         char *uri, int size);
 void *thread(void *vargp);
 void read_requesthdrs(rio_t *rp) ;
+void readBlocklist();
+char **blockList;
 
 /* 
  * main - Main routine for the proxy program 
  */
 int main(int argc, char **argv){
+    readBlocklist();
+
     int listenfd, *connfdp;
     char hostname[MAXLINE], port[MAXLINE];
     socklen_t clientlen;
@@ -51,10 +59,65 @@ int main(int argc, char **argv){
         Pthread_create(&tid, NULL, thread, connfdp);
     }
 
-
-
+    if(blockList != NULL) {
+        // Freeing the blocklist
+        int i = 0;
+        while(blockList[i] != NULL) {
+            // printf("%s\n", blockList[i]);
+            free(blockList[i]);
+            i++;
+        }
+        free(blockList);
+    }
 
     return 0;
+}
+
+void readBlocklist() {
+    char *path = "blocklist";
+    FILE *fp = fopen(path, "r");
+    if(fp == NULL) {
+        printf("WARNING:\nThe blocklist file either doesn't exist or cannot be opened.\n");
+    }
+
+    int num_lines = 0;
+    blockList = malloc(sizeof(blockList[0]) * num_lines);
+
+    char *new_line = NULL;
+    size_t str_len = 0;
+    ssize_t bytes_read;
+    while ((bytes_read = getline(&new_line, &str_len, fp)) != -1) {
+        new_line[strcspn(new_line, "\n")] = 0;
+
+        // Resize the array we allocated on the heap
+        void *ptr = realloc(blockList, (num_lines + 1) * sizeof(blockList[0]));
+        // Note that this can fail if there isn't enough free memory available
+        // This is also a comparatively expensive operation
+        // so you wouldn't typically do a resize for every single line
+        // Normally you would allocate extra space, wait for it to run out, then reallocate
+        // Either growing by a fixed size, or even doubling the size, each time it gets full
+
+        // Check if the allocation was successful
+        if (ptr == NULL) {
+          fprintf(stderr, "Failed to allocate memory at %s:%d\n", __FILE__, __LINE__);
+          // assert(false);
+        }
+        // Overwrite `lines` with the pointer to the new memory region only if realloc() was successful
+        blockList = ptr;
+
+        // Allocate a copy on the heap
+        // so that the array elements don't all point to the same buffer
+        // we must remember to free() this later
+        blockList[num_lines] = strdup(new_line);
+
+        // Keep track of the size of the array
+        num_lines++;
+    }
+
+    // Free the buffer that was allocated by getline()
+    free(new_line);
+    // Close the file since we're done with it
+    fclose(fp);
 }
 
 /*
@@ -164,6 +227,7 @@ int parse_uri(char *uri, char *hostname, char *pathname, int *port){
     len = hostend - hostbegin;
     strncpy(hostname, hostbegin, len);
     hostname[len] = '\0';
+
     
     /* Extract the port number */
     *port = 80; /* default */
