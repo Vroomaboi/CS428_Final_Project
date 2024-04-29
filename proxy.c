@@ -22,7 +22,8 @@ static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64;
  * Function prototypes
  */
 int parse_uri(char *uri, char *target_addr, char *path, int  *port);
-void format_log_entry(char *logstring, struct sockaddr_in *sockaddr, char *uri, int size);
+void format_log_entry(char *logstring, struct sockaddr_in *sockaddr, 
+                        char *uri, int size);
 void *thread(void *vargp);
 void read_requesthdrs(rio_t *rp) ;
 
@@ -171,7 +172,8 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
     char time_str[MAXLINE];
     char url[MAXLINE];
     unsigned long host;
-    unsigned char a, b, c, d;
+    char pathname[MAXLINE];
+    int port; 
 
     /* Get a formatted time string */
     now = time(NULL);
@@ -192,7 +194,7 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
     // for the student to do...
 
     //gets URL from uri
-    parse_uri(uri,url,NULL,NULL);
+    parse_uri(uri,url,pathname,port);
 
     //creates final string
     snprintf(logstring, MAXLINE, "%s %ld %s %d", time_str, host, url, size);
