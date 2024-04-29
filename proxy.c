@@ -26,7 +26,7 @@ static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64;
  * Function prototypes
  */
 int parse_uri(char *uri, char *target_addr, char *path, int  *port);
-void format_log_entry(char *logstring, struct sockaddr_in *sockaddr, 
+void format_log_entry(char *logstring, int fd, 
                         char *uri, int size);
 void *thread(void *vargp);
 void read_requesthdrs(rio_t *rp) ;
@@ -204,7 +204,10 @@ void *thread(void *vargp) {
     // Storing the port as a string
     char portStr[MAXLINE];
     snprintf(portStr, sizeof(portStr), "%d", *port);
-    requestfd = Open_clientfd(filename, portStr);
+    if((requestfd = open_clientfd(filename, portStr)) < 0) {
+        printf("Error opeining connection to %s\n", uri);
+        return NULL;
+    }
 
     // Sending the request using HTTP 1.0
     snprintf(request, sizeof(request), "%s /%s %s\r\n\r\n",
@@ -321,8 +324,7 @@ int parse_uri(char *uri, char *hostname, char *pathname, int *port){
  * (sockaddr), the URI from the request (uri), and the size in bytes
  * of the response from the server (size).
  */
-void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
-                      char *uri, int size) {
+void format_log_entry(char *logstring, int fd, char *uri, int size) {
     time_t now;
     char time_str[MAXLINE];
     // char url[MAXLINE];
@@ -344,8 +346,11 @@ void format_log_entry(char *logstring, struct sockaddr_in *sockaddr,
 
     // for the student to do...
     // inet_ntop(AF_INET, &(((struct sockaddr_in *) sockaddr)->sin_addr), host, INET_ADDRSTRLEN);
-    strcpy(host, "testhost");
-    // printf("TESTING THE SOCKET IP: %s", &(((struct sockaddr_in *) sockaddr)->sin_addr));
+    // strcpy(host, "testhost");
+    struct sockaddr_in addr;
+    socklen_t addr_size = sizeof(struct sockaddr_in);
+    int res = getpeername(fd, (struct sockaddr *)&addr, &addr_size);
+    inet_ntop(AF_INET, &(addr.sin_addr), host, INET_ADDRSTRLEN);
     
     
     /* Finally, store (and return) the formatted log entry string in logstring */
