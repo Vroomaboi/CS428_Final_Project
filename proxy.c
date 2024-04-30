@@ -234,7 +234,7 @@ void *thread(void *vargp) {
             method, pathname, "HTTP/1.0");
 
     char hostHead[MAXLINE];
-    snprintf(hostHead, sizeof(hostHead), "Host: %s\r\n", filename);
+    snprintf(hostHead, sizeof(hostHead)+200, "Host: %s\r\n", filename);
 
     strcat(request,hostHead);
     strcat(request, user_agent_hdr);
@@ -277,7 +277,12 @@ void *thread(void *vargp) {
     return NULL;
 }
 
-
+/*
+ * read_requesthdrs - Read Request Header
+ * 
+ * reads all request headers from the client to console.
+ * 
+ */
 void read_requesthdrs(rio_t *rp) {
     char buf[MAXLINE];
 
