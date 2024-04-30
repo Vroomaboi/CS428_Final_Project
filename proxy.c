@@ -29,7 +29,7 @@ int parse_uri(char *uri, char *target_addr, char *path, int  *port);
 void format_log_entry(char *logstring, int fd, 
                         char *uri, int size);
 void *thread(void *vargp);
-void read_requesthdrs(rio_t *rp) ;
+void read_requesthdrs(rio_t *rp, char *dest) ;
 void clienterror(int fd, char *cause, char *errnum, 
 		 char *shortmsg, char *longmsg);
 void readBlocklist();
@@ -172,7 +172,7 @@ void *thread(void *vargp) {
     }
 
     // This is the client's request that was sent to the proxy
-    printf("%s", buf);
+    // printf("%s", buf);
 
     // Copying the buffer components into their corresponding variables
     sscanf(buf, "%s %s %s", method, uri, version);
@@ -210,8 +210,10 @@ void *thread(void *vargp) {
         }
     }
 
-    // Reading the HTTP request headers into rio
-    read_requesthdrs(&rio);
+    // Reading the rest of the HTTP request headers
+    char remainingHeaders[MAXLINE];
+    read_requesthdrs(&rio, remainingHeaders);
+    // printf("THESE ARE THE HEADERS TO TOKENISE:\n%s\n", remainingHeaders);
 
     // Proxy make request
     // Storing the port as a string
@@ -240,7 +242,19 @@ void *thread(void *vargp) {
     strcat(request, user_agent_hdr);
     strcat(request,"Connection: close\r\n");
     strcat(request,"Proxy-Connection: close\r\n");
-    strcat(request,"\r\n\r\n");
+
+    char *token = strtok(remainingHeaders, "\r\n");
+    // printf("FIRST TOKEN:\n%s\n", token);
+    while(token != NULL) {
+        if(!strstr(token, "Host: ") && !strstr(token, "User-Agent: ") &&
+           !strstr(token, "Connection: ") && !strstr(token, "Proxy-Connection: ")) {
+            strcat(token, "\r\n");
+            strcat(request, token);
+        }
+        token = strtok(NULL, "\r\n");
+    }
+    strcat(request,"\r\n");
+    // printf("THE REQUEST TO SEND: \n%s", request);
 
     // Sending the request
     if(rio_writen(requestfd, request, strlen(request)) != strlen(request)){
@@ -283,18 +297,23 @@ void *thread(void *vargp) {
  * reads all request headers from the client to console.
  * 
  */
-void read_requesthdrs(rio_t *rp) {
+void read_requesthdrs(rio_t *rp, char *dest) {
     char buf[MAXLINE];
 
     // Reading the first header line into the buffer
     rio_readlineb(rp, buf, MAXLINE);
-    printf("%s", buf);
+    // printf("%s", buf);
+    strcat(dest, buf);
 
     // Getting the rest of the header lines
     while(strcmp(buf, "\r\n")) {
         rio_readlineb(rp, buf, MAXLINE);
-        printf("%s", buf);
+        // printf("%s", buf);
+        strcat(dest, buf);
     }
+
+    // printf("Request Headers Variable:\n%s",requestHeaders);
+
     return;
 }
 
