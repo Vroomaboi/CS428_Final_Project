@@ -360,12 +360,8 @@ void format_log_entry(char *logstring, int fd, char *uri, int size) {
      * because inet_ntoa is a Class 3 thread unsafe function that
      * returns a pointer to a static variable (Ch 13, CS:APP).
      */
-
     struct sockaddr_in addr;
-    socklen_t addr_size = sizeof(struct sockaddr_in);
-    int res = getpeername(fd, (struct sockaddr *)&addr, &addr_size);
     inet_ntop(AF_INET, &(addr.sin_addr), host, INET_ADDRSTRLEN);
-    
     
     /* Finally, store (and return) the formatted log entry string in logstring */
     snprintf(logstring, MAXLINE, "[%s] %s %s %d\n", time_str, host, uri, size);
@@ -376,7 +372,6 @@ void format_log_entry(char *logstring, int fd, char *uri, int size) {
 /*
  * clienterror - returns an error message to the client
  */
-/* $begin clienterror */
 void clienterror(int fd, char *cause, char *errnum, char *msgA, char *msgB) {
     char buf[MAXLINE], body[MAXBUF];
 
@@ -403,4 +398,3 @@ void clienterror(int fd, char *cause, char *errnum, char *msgA, char *msgB) {
         printf("Error in sending the client error page!\n");
     }
 }
-/* $end clienterror */
