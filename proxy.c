@@ -155,6 +155,9 @@ void *thread(void *vargp) {
     int requestfd, *port = Malloc(sizeof(int)); 
     rio_t rio;
 
+    //ignore SIGPIPE
+    Signal(SIGPIPE,SIG_IGN);
+
     /* Read request line and headers */
 
     // Associating file descriptor with the rio buffer
