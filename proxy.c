@@ -230,38 +230,19 @@ void *thread(void *vargp) {
     }
 
     // Sending the request using HTTP 1.0
-    snprintf(request, sizeof(request), "%s /%s %s\r\n",
-             method, pathname, "HTTP/1.0");
-    // printf(request);
-    if(rio_writen(requestfd, request, strlen(request)) != strlen(request)) {
-        printf("Error sending request to server!\n");
-    }
+    snprintf(request, sizeof(request), "%s /%s %s\r\n", 
+            method, pathname, "HTTP/1.0");
+
     char hostHead[MAXLINE];
     snprintf(hostHead, sizeof(hostHead), "Host: %s\r\n", filename);
-    // printf(hostHead);
-    if(rio_writen(requestfd, hostHead, strlen(hostHead)) != strlen(hostHead)) {
-        printf("Error sending request to server!\n");
-    }
-    // printf(user_agent_hdr);
-    if(rio_writen(requestfd, user_agent_hdr,
-       strlen(user_agent_hdr)) != strlen(user_agent_hdr)) {
-        printf("Error sending request to server!\n");
-    }
-    char *connHead = "Connection: close\r\n";
-    // printf(connHead);
-    if(rio_writen(requestfd, connHead, strlen(connHead)) != strlen(connHead)) {
-        printf("Error sending request to server!\n");
-    }
-    char *proxyHead = "Proxy-Connection: close\r\n";
-    // printf(proxyHead);
-    if(rio_writen(requestfd, proxyHead,
-       strlen(proxyHead)) != strlen(proxyHead)) {
-        printf("Error sending request to server!\n");
-    }
-    char *proxyEnd = "\r\n\r\n";
-    // printf(proxyEnd);
-    if(rio_writen(requestfd, proxyEnd,
-       strlen(proxyEnd)) != strlen(proxyEnd)) {
+
+    strcat(request,hostHead);
+    strcat(request, user_agent_hdr);
+    strcat(request,"Connection: close\r\n");
+    strcat(request,"Proxy-Connection: close\r\n");
+    strcat(request,"\r\n\r\n");
+
+    if(rio_writen(requestfd, request, strlen(request)) != strlen(request)){
         printf("Error sending request to server!\n");
     }
 
