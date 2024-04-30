@@ -246,6 +246,7 @@ void *thread(void *vargp) {
         printf("Error sending request to server!\n");
     }
 
+    //begin recieving and sending final headers
     size_t rLen = 0;
     int n;
     while((n = rio_readn(requestfd, buf, MAXLINE)) > 0) {
@@ -346,15 +347,11 @@ int parse_uri(char *uri, char *hostname, char *pathname, int *port){
 void format_log_entry(char *logstring, int fd, char *uri, int size) {
     time_t now;
     char time_str[MAXLINE];
-    // char url[MAXLINE];
     char host[INET_ADDRSTRLEN];
-    // char pathname[MAXLINE];
-    // int *port = Malloc(sizeof(int)); 
-
+ 
     /* Get a formatted time string */
     now = time(NULL);
     strftime(time_str, sizeof(time_str), "%a %d %b %Y %H:%M:%S %Z", localtime(&now));
-    // strcpy(time_str, "testing");
 
     /* 
      * Next, convert the IP address in network byte order to dotted decimal
@@ -363,9 +360,6 @@ void format_log_entry(char *logstring, int fd, char *uri, int size) {
      * returns a pointer to a static variable (Ch 13, CS:APP).
      */
 
-    // for the student to do...
-    // inet_ntop(AF_INET, &(((struct sockaddr_in *) sockaddr)->sin_addr), host, INET_ADDRSTRLEN);
-    // strcpy(host, "testhost");
     struct sockaddr_in addr;
     socklen_t addr_size = sizeof(struct sockaddr_in);
     int res = getpeername(fd, (struct sockaddr *)&addr, &addr_size);
@@ -373,16 +367,6 @@ void format_log_entry(char *logstring, int fd, char *uri, int size) {
     
     
     /* Finally, store (and return) the formatted log entry string in logstring */
-
-    // for the student to do...
-
-    // //gets URL from uri
-    // parse_uri(uri, url, pathname, port);
-
-    // char portStr[MAXLINE];
-    // snprintf(portStr, sizeof(portStr), "%d", *port);
-
-    //creates final string
     snprintf(logstring, MAXLINE, "[%s] %s %s %d\n", time_str, host, uri, size);
 
     return;
