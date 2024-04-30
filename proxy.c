@@ -49,10 +49,14 @@ int main(int argc, char **argv){
         exit(0);
     }
 
+    //Carl Note: we believe it should crash here,
+    //because if it continues it could corrupt the log file.
     Sem_init(&mutex, 0, 1);
 
+    //loads Blocklist to mem
     readBlocklist();
 
+    //ignore SIGPIPE
     Signal(SIGPIPE,SIG_IGN);
 
     int listenfd, *connfdp;
@@ -60,6 +64,8 @@ int main(int argc, char **argv){
     struct sockaddr_storage clientaddr;
     pthread_t tid;
 
+    //listens for connection on port, if connection is accepted,
+    //creates a thread to handle that connection.
     listenfd = Open_listenfd(argv[1]);
     while (1) {
         clientlen = sizeof(clientaddr);
@@ -68,6 +74,7 @@ int main(int argc, char **argv){
         Pthread_create(&tid, NULL, thread, connfdp);
     }
 
+    //frees mem of Blocklist
     if(blockList != NULL) {
         // Freeing the blocklist
         int i = 0;
