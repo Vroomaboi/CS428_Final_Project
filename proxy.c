@@ -227,22 +227,34 @@ void *thread(void *vargp) {
     }
 
     // Sending the request using HTTP 1.0
-    snprintf(request, sizeof(request), "%s /%s %s\r\n\r\n",
+    snprintf(request, sizeof(request), "%s /%s %s\r\n",
              method, pathname, "HTTP/1.0");
+    // printf(request);
     if(rio_writen(requestfd, request, strlen(request)) != strlen(request)) {
         printf("Error sending request to server!\n");
     }
-
-    // // Recieveing the response
-    // strcpy(buf,"");
-    // for (size_t i = 0; rio_readn(requestfd, srcf, MAXLINE) > 0; i++) {
-    //     strcat(buf,srcf);
-    // }
-    
-    // printf("%s",buf);
-    // if(rio_writen(connfd, buf, strlen(buf)) != strlen(buf)) {
-    //     printf("Error sending response to client!\n");
-    // }
+    char hostHead[MAXLINE];
+    snprintf(hostHead, sizeof(hostHead), "Host: %s\r\n", filename);
+    // printf(hostHead);
+    if(rio_writen(requestfd, hostHead, strlen(hostHead)) != strlen(hostHead)) {
+        printf("Error sending request to server!\n");
+    }
+    // printf(user_agent_hdr);
+    if(rio_writen(requestfd, user_agent_hdr,
+       strlen(user_agent_hdr)) != strlen(user_agent_hdr)) {
+        printf("Error sending request to server!\n");
+    }
+    char *connHead = "Connection: close\r\n";
+    // printf(connHead);
+    if(rio_writen(requestfd, connHead, strlen(connHead)) != strlen(connHead)) {
+        printf("Error sending request to server!\n");
+    }
+    char *proxyHead = "Proxy-Connection: close\r\n\r\n";
+    // printf(proxyHead);
+    if(rio_writen(requestfd, proxyHead,
+       strlen(proxyHead)) != strlen(proxyHead)) {
+        printf("Error sending request to server!\n");
+    }
 
     size_t rLen = 0;
     int n;
@@ -264,7 +276,7 @@ void *thread(void *vargp) {
     fprintf(logptr, "%s",logString);
     fclose(logptr);
     V(&mutex);
-    printf("LOG TEST: %s", logString);
+    // printf("LOG TEST: %s", logString);
 
     // Closing the connections
     close(requestfd);
