@@ -53,6 +53,8 @@ int main(int argc, char **argv){
 
     readBlocklist();
 
+    Signal(SIGPIPE,SIG_IGN);
+
     int listenfd, *connfdp;
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;
