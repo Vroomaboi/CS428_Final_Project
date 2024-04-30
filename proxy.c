@@ -229,7 +229,7 @@ void *thread(void *vargp) {
         return NULL;
     }
 
-    // Sending the request using HTTP 1.0
+    // Preparing the request
     snprintf(request, sizeof(request), "%s /%s %s\r\n", 
             method, pathname, "HTTP/1.0");
 
@@ -242,6 +242,7 @@ void *thread(void *vargp) {
     strcat(request,"Proxy-Connection: close\r\n");
     strcat(request,"\r\n\r\n");
 
+    // Sending the request
     if(rio_writen(requestfd, request, strlen(request)) != strlen(request)){
         printf("Error sending request to server!\n");
     }
