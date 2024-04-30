@@ -252,10 +252,16 @@ void *thread(void *vargp) {
     if(rio_writen(requestfd, connHead, strlen(connHead)) != strlen(connHead)) {
         printf("Error sending request to server!\n");
     }
-    char *proxyHead = "Proxy-Connection: close\r\n\r\n";
+    char *proxyHead = "Proxy-Connection: close\r\n";
     // printf(proxyHead);
     if(rio_writen(requestfd, proxyHead,
        strlen(proxyHead)) != strlen(proxyHead)) {
+        printf("Error sending request to server!\n");
+    }
+    char *proxyEnd = "\r\n\r\n";
+    // printf(proxyEnd);
+    if(rio_writen(requestfd, proxyEnd,
+       strlen(proxyEnd)) != strlen(proxyEnd)) {
         printf("Error sending request to server!\n");
     }
 
