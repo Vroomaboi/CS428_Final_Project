@@ -33,6 +33,9 @@ void read_requesthdrs(rio_t *rp, char *dest) ;
 void clienterror(int fd, char *cause, char *errnum, 
 		 char *shortmsg, char *longmsg);
 void readBlocklist();
+void addToLog(char *logMsg);
+
+// String to hold blockList
 char **blockList;
 
 // Semaphore to protect the log file writing
@@ -197,6 +200,11 @@ void *thread(void *vargp) {
         int i = 0;
         while(blockList[i] != NULL) {
             if(strcmp(filename, blockList[i]) == 0) {
+                char log[MAXLINE];
+                format_log_entry(log, connfd, uri, 0);
+                log[strlen(log) - 1] = ' ';
+                strcat(log, "- BLOCKED REQUEST: POTENTIALLY MALICIOUS SITE\n");
+                addToLog(log);
                 clienterror(
                     connfd,
                     filename,
@@ -275,14 +283,8 @@ void *thread(void *vargp) {
 
     // Logging the response
     char logString[MAXLINE];
-    format_log_entry(logString, requestfd, uri, rSize);
-    P(&mutex);
-    FILE *logptr;
-    logptr = fopen("proxy.log", "a");
-    fprintf(logptr, "%s",logString);
-    fclose(logptr);
-    V(&mutex);
-    // printf("LOG TEST: %s", logString);
+    format_log_entry(logString, connfd, uri, rSize);
+    addToLog(logString);
 
     // Closing the connections
     close(requestfd);
@@ -405,20 +407,44 @@ void clienterror(int fd, char *cause, char *errnum, char *msgA, char *msgB) {
     sprintf(body, "%s%s: %s\r\n", body, errnum, msgA);
     sprintf(body, "%s<p>%s: %s\r\n", body, msgB, cause);
 
-    /* Print the HTTP response */
+    /* Serve the HTTP response */
     sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, msgA);
+    sprintf(buf, "%sContent-type: text/html\r\n", buf);
+    sprintf(buf, "%sContent-length: %d\r\n\r\n", buf, (int)strlen(body));
     if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
-        printf("Error in sending the client error page!\n");
-    }
-    sprintf(buf, "Content-type: text/html\r\n");
-    if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
-        printf("Error in sending the client error page!\n");
-    }
-    sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
-    if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
-        printf("Error in sending the client error page!\n");
+        printf("Failed to send HTTP error response headers to the client!\n");
+        printf("Erorr Headers: %s");
+        return;
     }
     if(rio_writen(fd, body, strlen(body)) != strlen(body)) {
-        printf("Error in sending the client error page!\n");
+        printf("Failed to send HTML error response body to the client!\n");
+        printf("Erorr HTML Body: %s");
+        return;
     }
+    // sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, msgA);
+    // if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
+    //     printf("Error in sending the client error page!\n");
+    // }
+    // sprintf(buf, "Content-type: text/html\r\n");
+    // if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
+    //     printf("Error in sending the client error page!\n");
+    // }
+    // sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
+    // if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
+    //     printf("Error in sending the client error page!\n");
+    // }
+    // if(rio_writen(fd, body, strlen(body)) != strlen(body)) {
+    //     printf("Error in sending the client error page!\n");
+    // }
+}
+
+void addToLog(char *logMsg) {
+    // Semaphore to protect file appending
+    P(&mutex);
+    FILE *logptr;
+    logptr = fopen("proxy.log", "a");
+    fprintf(logptr, "%s", logMsg);
+    fclose(logptr);
+    V(&mutex);
+    return NULL;
 }
