@@ -55,7 +55,8 @@ int main(int argc, char **argv){
     //Carl Note: we believe it should crash here,
     //because if it continues it could corrupt the log file.
     if(sem_init(&mutex, 0, 1) < 0) {
-        
+        printf("Warning:\nFailed to set up semaphore!\n");
+        printf("Log file will not be protected!\n");
     }
 
     //loads Blocklist to mem
