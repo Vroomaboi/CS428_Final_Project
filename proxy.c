@@ -33,13 +33,13 @@ void read_requesthdrs(rio_t *rp, char *dest) ;
 void clienterror(int fd, char *cause, char *errnum, 
 		 char *shortmsg, char *longmsg);
 void readBlocklist();
-void addToLog(char *logMsg);
+void add_msg_to_log(char *logMsg);
+void filter_request_headers(char *src, char *dest);
 
 // String to hold blockList
 char **blockList;
 
 // Semaphore to protect the log file writing
-volatile long cnt = 0;
 sem_t mutex;
 
 /* 
@@ -54,7 +54,9 @@ int main(int argc, char **argv){
 
     //Carl Note: we believe it should crash here,
     //because if it continues it could corrupt the log file.
-    Sem_init(&mutex, 0, 1);
+    if(sem_init(&mutex, 0, 1) < 0) {
+        
+    }
 
     //loads Blocklist to mem
     readBlocklist();
@@ -204,7 +206,7 @@ void *thread(void *vargp) {
                 format_log_entry(log, connfd, uri, 0);
                 log[strlen(log) - 1] = ' ';
                 strcat(log, "- BLOCKED REQUEST: POTENTIALLY MALICIOUS SITE\n");
-                addToLog(log);
+                add_msg_to_log(log);
                 clienterror(
                     connfd,
                     filename,
@@ -245,24 +247,12 @@ void *thread(void *vargp) {
 
     char hostHead[MAXLINE];
     snprintf(hostHead, sizeof(hostHead)+200, "Host: %s\r\n", filename);
-
     strcat(request,hostHead);
     strcat(request, user_agent_hdr);
     strcat(request,"Connection: close\r\n");
     strcat(request,"Proxy-Connection: close\r\n");
-
-    char *token = strtok(remainingHeaders, "\r\n");
-    // printf("FIRST TOKEN:\n%s\n", token);
-    while(token != NULL) {
-        if(!strstr(token, "Host: ") && !strstr(token, "User-Agent: ") &&
-           !strstr(token, "Connection: ") && !strstr(token, "Proxy-Connection: ")) {
-            strcat(token, "\r\n");
-            strcat(request, token);
-        }
-        token = strtok(NULL, "\r\n");
-    }
+    filter_request_headers(remainingHeaders, request);
     strcat(request,"\r\n");
-    // printf("THE REQUEST TO SEND: \n%s", request);
 
     // Sending the request
     if(rio_writen(requestfd, request, strlen(request)) != strlen(request)){
@@ -284,7 +274,7 @@ void *thread(void *vargp) {
     // Logging the response
     char logString[MAXLINE];
     format_log_entry(logString, connfd, uri, rSize);
-    addToLog(logString);
+    add_msg_to_log(logString);
 
     // Closing the connections
     close(requestfd);
@@ -317,6 +307,19 @@ void read_requesthdrs(rio_t *rp, char *dest) {
     // printf("Request Headers Variable:\n%s",requestHeaders);
 
     return;
+}
+
+void filter_request_headers(char *src, char *dest) {
+    char *token = strtok(src, "\r\n");
+    while(token != NULL) {
+        if(!strstr(token, "Host: ") && !strstr(token, "User-Agent: ") &&
+           !strstr(token, "Connection: ") && !strstr(token, "Proxy-Connection: ") &&
+           !strstr(token, "Keep-Alive: ")) {
+            strcat(token, "\r\n");
+            strcat(dest, token);
+        }
+        token = strtok(NULL, "\r\n");
+    }
 }
 
 /*
@@ -421,30 +424,23 @@ void clienterror(int fd, char *cause, char *errnum, char *msgA, char *msgB) {
         printf("Erorr HTML Body: %s");
         return;
     }
-    // sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, msgA);
-    // if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
-    //     printf("Error in sending the client error page!\n");
-    // }
-    // sprintf(buf, "Content-type: text/html\r\n");
-    // if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
-    //     printf("Error in sending the client error page!\n");
-    // }
-    // sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
-    // if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
-    //     printf("Error in sending the client error page!\n");
-    // }
-    // if(rio_writen(fd, body, strlen(body)) != strlen(body)) {
-    //     printf("Error in sending the client error page!\n");
-    // }
 }
 
-void addToLog(char *logMsg) {
+void add_msg_to_log(char *logMsg) {
     // Semaphore to protect file appending
-    P(&mutex);
+    // P(&mutex);
+    if(sem_wait(&mutex) < 0) {
+        printf("Warning:\nFailed to test log file accessibility!\n");
+        printf("The following message will not be logged:\n%s", logMsg);
+        return;
+    }
     FILE *logptr;
     logptr = fopen("proxy.log", "a");
     fprintf(logptr, "%s", logMsg);
     fclose(logptr);
-    V(&mutex);
+    if(sem_post(&mutex) < 0) {
+        printf("Warning:\nAn error has occured in unlocking the log file!\n");
+    }
+    // V(&mutex);
     return NULL;
 }
