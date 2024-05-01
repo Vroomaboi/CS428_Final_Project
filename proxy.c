@@ -32,7 +32,7 @@ void *thread(void *vargp);
 void read_requesthdrs(rio_t *rp, char *dest) ;
 void clienterror(int fd, char *cause, char *errnum, 
 		 char *shortmsg, char *longmsg);
-void readBlocklist();
+void read_blocklist();
 void add_msg_to_log(char *logMsg);
 void filter_request_headers(char *src, char *dest);
 
@@ -59,7 +59,7 @@ int main(int argc, char **argv){
     }
 
     //loads Blocklist to mem
-    readBlocklist();
+    read_blocklist();
 
     //ignore SIGPIPE
     Signal(SIGPIPE,SIG_IGN);
@@ -95,10 +95,10 @@ int main(int argc, char **argv){
 
 
 /* 
- * readBlocklist - Read from file to create a simple firewall 
+ * read_blocklist - Read from file to create a simple firewall 
  * that prevents access to certain sites.
  */
-void readBlocklist() {
+void read_blocklist() {
     char *path = "blocklist";
     FILE *fp = fopen(path, "r");
     if(fp == NULL) {
