@@ -87,7 +87,7 @@ int main(int argc, char **argv){
         Pthread_create(&tid, NULL, thread, connfdp);
     }
 
-    // Frees mem of Blocklist
+    // Frees mem of blocklist
     if(blockList != NULL) {
         // Freeing the blocklist elements
         int i = 0;
@@ -128,10 +128,12 @@ void read_blocklist() {
 
         // Check if the allocation was successful
         if (ptr == NULL) {
-          fprintf(stderr, "Failed to allocate memory at %s:%d\n", __FILE__, __LINE__);
-        //   assert(false);
+          printf("WARNING:\nError loading blocklist!\n");
+          printf("Blocklist will NOT be enforced!\n");
+          return;
         }
-        // Overwrite `lines` with the pointer to the new memory region only if realloc() was successful
+
+        // Overwrite `blocklist` with the pointer to the new memory region only if realloc() was successful
         blockList = ptr;
 
         // Allocate a copy on the heap
@@ -142,9 +144,8 @@ void read_blocklist() {
         num_lines++;
     }
 
-    // Free the buffer that was allocated by getline()
+    // Resource cleanup
     free(new_line);
-    // Close the file since we're done with it
     fclose(fp);
 
     return;
