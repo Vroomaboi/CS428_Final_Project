@@ -165,21 +165,15 @@ void *thread(void *vargp) {
     int requestfd, *port = Malloc(sizeof(int)); 
     rio_t rio;
 
-    /* Read request line and headers */
-
     // Associating file descriptor with the rio buffer
     Rio_readinitb(&rio, connfd);
     
-    // Checking if reading a line into the buffer encountered an error
-    // This was "if(!Rio_readlineb(&rio, buf, MAXLINE)) return NULL;"
-    // This should still work though
+    // Reads the first line of the client's request and closes the connection
+    // and thread on an error
     if (rio_readlineb(&rio, buf, MAXLINE) < 0) {
         close(connfd);
         return NULL;
     }
-
-    // This is the client's request that was sent to the proxy
-    // printf("%s", buf);
 
     // Copying the buffer components into their corresponding variables
     sscanf(buf, "%s %s %s", method, uri, version);
@@ -230,7 +224,7 @@ void *thread(void *vargp) {
     char remainingHeaders[MAXLINE];
     read_requesthdrs(&rio, remainingHeaders);
 
-    // Proxy make request
+    // Opening a connection to the requested host
     // Storing the port as a string
     char portStr[MAXLINE];
     snprintf(portStr, sizeof(portStr), "%d", *port);
@@ -246,7 +240,7 @@ void *thread(void *vargp) {
         return NULL;
     }
 
-    // Preparing the request
+    // Preparing the request to send to the host
     snprintf(request, sizeof(request), "%s /%s %s\r\n", method, pathname,
              "HTTP/1.0");
     char hostHead[MAXLINE];
@@ -263,7 +257,7 @@ void *thread(void *vargp) {
         printf("Error sending request to server!\n");
     }
 
-    //begin recieving and sending final headers
+    // Reading the response from the host and send it to the client
     size_t rLen = 0;
     int n;
     while((n = rio_readn(requestfd, buf, MAXLINE)) > 0) {
@@ -279,7 +273,8 @@ void *thread(void *vargp) {
         bzero(buf, MAXLINE);
     }
 
-    // Checkign for ECONNRESET error and
+    // Checkign for ECONNRESET error and closing the connection and thread if
+    // it has been encountered
     if(n == -1) {
         if(errno == ECONNRESET) {
             printf("Connection closed by the host prematurely!\n");
@@ -288,6 +283,8 @@ void *thread(void *vargp) {
             return;
         }
     }
+
+    // Calculating the response size in bytes
     int rSize = rLen * 8;
 
     // Logging the response
@@ -303,10 +300,8 @@ void *thread(void *vargp) {
 }
 
 /*
- * read_requesthdrs - Read Request Header
- * 
- * reads all request headers from the client to console.
- * 
+ * read_requesthdrs - Reads all of the request headers from the robust input
+ *                    output buffer rp and stores them in the string dest
  */
 void read_requesthdrs(rio_t *rp, char *dest) {
     char buf[MAXLINE];
@@ -324,6 +319,10 @@ void read_requesthdrs(rio_t *rp, char *dest) {
     return;
 }
 
+/*
+* filter_request_headers - Filters out unwanted headers in the string src and
+*                          concatenates the rest of them to the string dest
+*/
 void filter_request_headers(char *src, char *dest) {
     char *token = strtok(src, "\r\n");
     while(token != NULL) {
@@ -390,9 +389,9 @@ int parse_uri(char *uri, char *hostname, char *pathname, int *port){
 /*
  * format_log_entry - Create a formatted log entry in logstring. 
  * 
- * The inputs are the socket address of the requesting client
- * (sockaddr), the URI from the request (uri), and the size in bytes
- * of the response from the server (size).
+ * The inputs are the connection file descriptor of the requesting client, the
+ * URI from the request (uri), and the size in bytes of the response from the
+ * server (size).
  */
 void format_log_entry(char *logstring, int fd, char *uri, int size) {
     time_t now;
@@ -423,7 +422,10 @@ void format_log_entry(char *logstring, int fd, char *uri, int size) {
 }
 
 /*
- * clienterror - returns an error message to the client
+ * clienterror - Returns an error message web page to the client given the
+ *               client's connection file descriptor, a string of the cause,
+ *               a string error number, a string for a short description of the
+ *               error, and a string for a long description of the error
  */
 void clienterror(int fd, char *cause, char *errnum, char *msgA, char *msgB) {
     char buf[MAXLINE], body[MAXBUF];
@@ -456,6 +458,11 @@ void clienterror(int fd, char *cause, char *errnum, char *msgA, char *msgB) {
     return;
 }
 
+/*
+ * add_msg_to_log - Adds a string message logMsg to the log file, creates a log
+ *                  file if one does not exist, and uses semaphores to prevent
+ *                  overlapping writes to the log file
+*/
 void add_msg_to_log(char *logMsg) {
     // Protecting the log file with a semaphore
     if(sem_wait(&mutex) < 0) {
