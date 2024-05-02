@@ -161,9 +161,6 @@ void *thread(void *vargp) {
     int requestfd, *port = Malloc(sizeof(int)); 
     rio_t rio;
 
-    // Ignore SIGPIPE
-    // Signal(SIGPIPE,SIG_IGN);
-
     /* Read request line and headers */
 
     // Associating file descriptor with the rio buffer
@@ -185,13 +182,17 @@ void *thread(void *vargp) {
 
     // Disregarding methods other than GET
     if (strcasecmp(method, "GET")) {
-        clienterror(
+        if(strcmp(method, "") != 0) {
+            clienterror(
             connfd,
             filename,
             "405",
             "Method Not Allowed",
             "This HTTP method is not allowed using this proxy."
         );
+        } else {
+            printf("Client connection has been prematurely closed!\n");
+        }
         return NULL;
     }
 
@@ -231,7 +232,7 @@ void *thread(void *vargp) {
     char portStr[MAXLINE];
     snprintf(portStr, sizeof(portStr), "%d", *port);
     if((requestfd = open_clientfd(filename, portStr)) < 0) {
-        printf("Error opeining connection to %s\n", uri);
+        printf("Error opening connection to %s\n", uri);
         clienterror(
                     connfd,
                     filename,
@@ -422,14 +423,20 @@ void clienterror(int fd, char *cause, char *errnum, char *msgA, char *msgB) {
     sprintf(buf, "%sContent-length: %d\r\n\r\n", buf, (int)strlen(body));
     if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
         printf("Failed to send HTTP error response headers to the client!\n");
-        printf("Erorr Headers: %s");
+        printf("Erorr Headers: %s", buf);
+        close(fd);
         return;
     }
     if(rio_writen(fd, body, strlen(body)) != strlen(body)) {
         printf("Failed to send HTML error response body to the client!\n");
-        printf("Erorr HTML Body: %s");
+        printf("Erorr HTML Body: %s", body);
+        close(fd);
         return;
     }
+
+    close(fd);
+
+    return;
 }
 
 void add_msg_to_log(char *logMsg) {
