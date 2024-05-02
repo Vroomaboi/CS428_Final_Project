@@ -52,26 +52,28 @@ int main(int argc, char **argv){
         exit(0);
     }
 
-    //Carl Note: we believe it should crash here,
-    //because if it continues it could corrupt the log file.
+    // Set up the semaphore
     if(sem_init(&mutex, 0, 1) < 0) {
         printf("Warning:\nFailed to set up semaphore!\n");
         printf("Log file will not be protected!\n");
     }
 
-    //loads Blocklist to mem
+    // Loads blocklist to mem
     read_blocklist();
 
-    //ignore SIGPIPE
-    Signal(SIGPIPE,SIG_IGN);
+    // Ignore SIGPIPE
+    // Signal(SIGPIPE,SIG_IGN);
+    if(signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+        printf("SIGPIPE Handler Error!\n");
+    }
 
     int listenfd, *connfdp;
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;
     pthread_t tid;
 
-    //listens for connection on port, if connection is accepted,
-    //creates a thread to handle that connection.
+    // Listens for connection on port, if connection is accepted,
+    // creates a thread to handle that connection
     listenfd = Open_listenfd(argv[1]);
     while (1) {
         clientlen = sizeof(clientaddr);
@@ -80,9 +82,9 @@ int main(int argc, char **argv){
         Pthread_create(&tid, NULL, thread, connfdp);
     }
 
-    //frees mem of Blocklist
+    // Frees mem of Blocklist
     if(blockList != NULL) {
-        // Freeing the blocklist
+        // Freeing the blocklist elements
         int i = 0;
         while(blockList[i] != NULL) {
             free(blockList[i]);
@@ -154,15 +156,13 @@ void *thread(void *vargp) {
     Pthread_detach(pthread_self());
     free(vargp);
 
-    char buf[MAXLINE], method[MAXLINE], 
-         uri[MAXLINE], version[MAXLINE],
-         filename[MAXLINE], pathname[MAXLINE], 
-         request[MAXLINE];
+    char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE],
+         filename[MAXLINE], pathname[MAXLINE], request[MAXLINE];
     int requestfd, *port = Malloc(sizeof(int)); 
     rio_t rio;
 
-    //ignore SIGPIPE
-    Signal(SIGPIPE,SIG_IGN);
+    // Ignore SIGPIPE
+    // Signal(SIGPIPE,SIG_IGN);
 
     /* Read request line and headers */
 
