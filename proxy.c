@@ -61,10 +61,15 @@ int main(int argc, char **argv){
     // Loads blocklist to mem
     read_blocklist();
 
-    // Ignore SIGPIPE
-    // Signal(SIGPIPE,SIG_IGN);
+    // Ignore SIGPIPE, EPIPE, and ECONNRESET
     if(signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
         printf("SIGPIPE Handler Error!\n");
+    }
+    if(signal(EPIPE, SIG_IGN) == SIG_ERR) {
+        printf("EPIPE Handler Error!\n");
+    }
+    if(signal(ECONNRESET, SIG_IGN) == SIG_ERR) {
+        printf("ECONNRESET Handler Error!\n");
     }
 
     int listenfd, *connfdp;
@@ -225,7 +230,6 @@ void *thread(void *vargp) {
     // Reading the rest of the HTTP request headers
     char remainingHeaders[MAXLINE];
     read_requesthdrs(&rio, remainingHeaders);
-    // printf("THESE ARE THE HEADERS TO TOKENISE:\n%s\n", remainingHeaders);
 
     // Proxy make request
     // Storing the port as a string
@@ -244,9 +248,8 @@ void *thread(void *vargp) {
     }
 
     // Preparing the request
-    snprintf(request, sizeof(request), "%s /%s %s\r\n", 
-            method, pathname, "HTTP/1.0");
-
+    snprintf(request, sizeof(request), "%s /%s %s\r\n", method, pathname,
+             "HTTP/1.0");
     char hostHead[MAXLINE];
     snprintf(hostHead, sizeof(hostHead)+200, "Host: %s\r\n", filename);
     strcat(request,hostHead);
@@ -296,17 +299,13 @@ void read_requesthdrs(rio_t *rp, char *dest) {
 
     // Reading the first header line into the buffer
     rio_readlineb(rp, buf, MAXLINE);
-    // printf("%s", buf);
     strcat(dest, buf);
 
     // Getting the rest of the header lines
     while(strcmp(buf, "\r\n")) {
         rio_readlineb(rp, buf, MAXLINE);
-        // printf("%s", buf);
         strcat(dest, buf);
     }
-
-    // printf("Request Headers Variable:\n%s",requestHeaders);
 
     return;
 }
@@ -402,7 +401,6 @@ void format_log_entry(char *logstring, int fd, char *uri, int size) {
     int res = getpeername(fd, (struct sockaddr *)&addr, &addrlen);
     // inet_ntop is thread safe according to the internet!
     inet_ntop(AF_INET, &addr.sin_addr, host, INET_ADDRSTRLEN);
-    printf("Address family: %d\n", addr.sin_family);
     
     /* Finally, store (and return) the formatted log entry string in logstring */
     snprintf(logstring, MAXLINE, "[%s] %s %s %d\n", time_str, host, uri, size);
@@ -445,8 +443,7 @@ void clienterror(int fd, char *cause, char *errnum, char *msgA, char *msgB) {
 }
 
 void add_msg_to_log(char *logMsg) {
-    // Semaphore to protect file appending
-    // P(&mutex);
+    // Protecting the log file with a semaphore
     if(sem_wait(&mutex) < 0) {
         printf("Warning:\nFailed to test log file accessibility!\n");
         printf("The following message will not be logged:\n%s", logMsg);
@@ -459,6 +456,5 @@ void add_msg_to_log(char *logMsg) {
     if(sem_post(&mutex) < 0) {
         printf("Warning:\nAn error has occured in unlocking the log file!\n");
     }
-    // V(&mutex);
     return NULL;
 }
