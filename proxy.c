@@ -32,11 +32,14 @@ void *thread(void *vargp);
 void read_requesthdrs(rio_t *rp, char *dest) ;
 void clienterror(int fd, char *cause, char *errnum, 
 		 char *shortmsg, char *longmsg);
-void readBlocklist();
+void read_blocklist();
+void add_msg_to_log(char *logMsg);
+void filter_request_headers(char *src, char *dest);
+
+// String to hold blockList
 char **blockList;
 
 // Semaphore to protect the log file writing
-volatile long cnt = 0;
 sem_t mutex;
 
 /* 
@@ -49,23 +52,28 @@ int main(int argc, char **argv){
         exit(0);
     }
 
-    //Carl Note: we believe it should crash here,
-    //because if it continues it could corrupt the log file.
-    Sem_init(&mutex, 0, 1);
+    // Set up the semaphore
+    if(sem_init(&mutex, 0, 1) < 0) {
+        printf("Warning:\nFailed to set up semaphore!\n");
+        printf("Log file will not be protected!\n");
+    }
 
-    //loads Blocklist to mem
-    readBlocklist();
+    // Loads blocklist to mem
+    read_blocklist();
 
-    //ignore SIGPIPE
-    Signal(SIGPIPE,SIG_IGN);
+    // Ignore SIGPIPE
+    // Signal(SIGPIPE,SIG_IGN);
+    if(signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+        printf("SIGPIPE Handler Error!\n");
+    }
 
     int listenfd, *connfdp;
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;
     pthread_t tid;
 
-    //listens for connection on port, if connection is accepted,
-    //creates a thread to handle that connection.
+    // Listens for connection on port, if connection is accepted,
+    // creates a thread to handle that connection
     listenfd = Open_listenfd(argv[1]);
     while (1) {
         clientlen = sizeof(clientaddr);
@@ -74,9 +82,9 @@ int main(int argc, char **argv){
         Pthread_create(&tid, NULL, thread, connfdp);
     }
 
-    //frees mem of Blocklist
+    // Frees mem of Blocklist
     if(blockList != NULL) {
-        // Freeing the blocklist
+        // Freeing the blocklist elements
         int i = 0;
         while(blockList[i] != NULL) {
             free(blockList[i]);
@@ -90,10 +98,10 @@ int main(int argc, char **argv){
 
 
 /* 
- * readBlocklist - Read from file to create a simple firewall 
+ * read_blocklist - Read from file to create a simple firewall 
  * that prevents access to certain sites.
  */
-void readBlocklist() {
+void read_blocklist() {
     char *path = "blocklist";
     FILE *fp = fopen(path, "r");
     if(fp == NULL) {
@@ -148,15 +156,13 @@ void *thread(void *vargp) {
     Pthread_detach(pthread_self());
     free(vargp);
 
-    char buf[MAXLINE], method[MAXLINE], 
-         uri[MAXLINE], version[MAXLINE],
-         filename[MAXLINE], pathname[MAXLINE], 
-         request[MAXLINE];
+    char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE],
+         filename[MAXLINE], pathname[MAXLINE], request[MAXLINE];
     int requestfd, *port = Malloc(sizeof(int)); 
     rio_t rio;
 
-    //ignore SIGPIPE
-    Signal(SIGPIPE,SIG_IGN);
+    // Ignore SIGPIPE
+    // Signal(SIGPIPE,SIG_IGN);
 
     /* Read request line and headers */
 
@@ -197,6 +203,11 @@ void *thread(void *vargp) {
         int i = 0;
         while(blockList[i] != NULL) {
             if(strcmp(filename, blockList[i]) == 0) {
+                char log[MAXLINE];
+                format_log_entry(log, connfd, uri, 0);
+                log[strlen(log) - 1] = ' ';
+                strcat(log, "- BLOCKED REQUEST: POTENTIALLY MALICIOUS SITE\n");
+                add_msg_to_log(log);
                 clienterror(
                     connfd,
                     filename,
@@ -237,24 +248,12 @@ void *thread(void *vargp) {
 
     char hostHead[MAXLINE];
     snprintf(hostHead, sizeof(hostHead)+200, "Host: %s\r\n", filename);
-
     strcat(request,hostHead);
     strcat(request, user_agent_hdr);
     strcat(request,"Connection: close\r\n");
     strcat(request,"Proxy-Connection: close\r\n");
-
-    char *token = strtok(remainingHeaders, "\r\n");
-    // printf("FIRST TOKEN:\n%s\n", token);
-    while(token != NULL) {
-        if(!strstr(token, "Host: ") && !strstr(token, "User-Agent: ") &&
-           !strstr(token, "Connection: ") && !strstr(token, "Proxy-Connection: ")) {
-            strcat(token, "\r\n");
-            strcat(request, token);
-        }
-        token = strtok(NULL, "\r\n");
-    }
+    filter_request_headers(remainingHeaders, request);
     strcat(request,"\r\n");
-    // printf("THE REQUEST TO SEND: \n%s", request);
 
     // Sending the request
     if(rio_writen(requestfd, request, strlen(request)) != strlen(request)){
@@ -275,14 +274,8 @@ void *thread(void *vargp) {
 
     // Logging the response
     char logString[MAXLINE];
-    format_log_entry(logString, requestfd, uri, rSize);
-    P(&mutex);
-    FILE *logptr;
-    logptr = fopen("proxy.log", "a");
-    fprintf(logptr, "%s",logString);
-    fclose(logptr);
-    V(&mutex);
-    // printf("LOG TEST: %s", logString);
+    format_log_entry(logString, connfd, uri, rSize);
+    add_msg_to_log(logString);
 
     // Closing the connections
     close(requestfd);
@@ -315,6 +308,19 @@ void read_requesthdrs(rio_t *rp, char *dest) {
     // printf("Request Headers Variable:\n%s",requestHeaders);
 
     return;
+}
+
+void filter_request_headers(char *src, char *dest) {
+    char *token = strtok(src, "\r\n");
+    while(token != NULL) {
+        if(!strstr(token, "Host: ") && !strstr(token, "User-Agent: ") &&
+           !strstr(token, "Connection: ") && !strstr(token, "Proxy-Connection: ") &&
+           !strstr(token, "Keep-Alive: ")) {
+            strcat(token, "\r\n");
+            strcat(dest, token);
+        }
+        token = strtok(NULL, "\r\n");
+    }
 }
 
 /*
@@ -410,20 +416,37 @@ void clienterror(int fd, char *cause, char *errnum, char *msgA, char *msgB) {
     sprintf(body, "%s%s: %s\r\n", body, errnum, msgA);
     sprintf(body, "%s<p>%s: %s\r\n", body, msgB, cause);
 
-    /* Print the HTTP response */
+    /* Serve the HTTP response */
     sprintf(buf, "HTTP/1.0 %s %s\r\n", errnum, msgA);
+    sprintf(buf, "%sContent-type: text/html\r\n", buf);
+    sprintf(buf, "%sContent-length: %d\r\n\r\n", buf, (int)strlen(body));
     if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
-        printf("Error in sending the client error page!\n");
-    }
-    sprintf(buf, "Content-type: text/html\r\n");
-    if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
-        printf("Error in sending the client error page!\n");
-    }
-    sprintf(buf, "Content-length: %d\r\n\r\n", (int)strlen(body));
-    if(rio_writen(fd, buf, strlen(buf)) != strlen(buf)) {
-        printf("Error in sending the client error page!\n");
+        printf("Failed to send HTTP error response headers to the client!\n");
+        printf("Erorr Headers: %s");
+        return;
     }
     if(rio_writen(fd, body, strlen(body)) != strlen(body)) {
-        printf("Error in sending the client error page!\n");
+        printf("Failed to send HTML error response body to the client!\n");
+        printf("Erorr HTML Body: %s");
+        return;
     }
+}
+
+void add_msg_to_log(char *logMsg) {
+    // Semaphore to protect file appending
+    // P(&mutex);
+    if(sem_wait(&mutex) < 0) {
+        printf("Warning:\nFailed to test log file accessibility!\n");
+        printf("The following message will not be logged:\n%s", logMsg);
+        return;
+    }
+    FILE *logptr;
+    logptr = fopen("proxy.log", "a");
+    fprintf(logptr, "%s", logMsg);
+    fclose(logptr);
+    if(sem_post(&mutex) < 0) {
+        printf("Warning:\nAn error has occured in unlocking the log file!\n");
+    }
+    // V(&mutex);
+    return NULL;
 }
