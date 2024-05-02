@@ -339,14 +339,19 @@ int parse_uri(char *uri, char *hostname, char *pathname, int *port){
     /* Extract the host name */
     hostbegin = uri + 7;
     hostend = strpbrk(hostbegin, " :/\r\n\0");
-    len = hostend - hostbegin;
+    if (hostend) {
+        len = hostend - hostbegin;
+    } else {
+        len = strlen(hostbegin);
+    }
+    
     strncpy(hostname, hostbegin, len);
     hostname[len] = '\0';
 
     
     /* Extract the port number */
     *port = 80; /* default */
-    if (*hostend == ':')   
+    if (hostend && *hostend == ':')   
 	    *port = atoi(hostend + 1);
     
     /* Extract the path */
