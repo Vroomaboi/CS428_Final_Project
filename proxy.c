@@ -36,14 +36,15 @@ void read_blocklist();
 void add_msg_to_log(char *logMsg);
 void filter_request_headers(char *src, char *dest);
 
-// String to hold blockList
+// String array to hold blockList
 char **blockList;
 
 // Semaphore to protect the log file writing
 sem_t mutex;
 
 /* 
- * main - Main routine for the proxy program 
+ * main - Main routine for the proxy program that opens a listening port and
+ *        creates threads for each new client connection
  */
 int main(int argc, char **argv){
     /* Check arguments */
@@ -52,26 +53,21 @@ int main(int argc, char **argv){
         exit(0);
     }
 
-    // Set up the semaphore
+    // Set up the semaphore to protect the log file
     if(sem_init(&mutex, 0, 1) < 0) {
         printf("Warning:\nFailed to set up semaphore!\n");
         printf("Log file will not be protected!\n");
     }
 
-    // Loads blocklist to mem
+    // Loads blocklist file into the blocklist string array
     read_blocklist();
 
-    // Ignore SIGPIPE, EPIPE, and ECONNRESET
+    // Ignore SIGPIPE to prevent crashing
     if(signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
         printf("SIGPIPE Handler Error!\n");
     }
-    if(signal(EPIPE, SIG_IGN) == SIG_ERR) {
-        printf("EPIPE Handler Error!\n");
-    }
-    if(signal(ECONNRESET, SIG_IGN) == SIG_ERR) {
-        printf("ECONNRESET Handler Error!\n");
-    }
 
+    // Setting up the server and client connections
     int listenfd, *connfdp;
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;
@@ -87,9 +83,9 @@ int main(int argc, char **argv){
         Pthread_create(&tid, NULL, thread, connfdp);
     }
 
-    // Frees mem of blocklist
+    // Frees the memory of blocklist
     if(blockList != NULL) {
-        // Freeing the blocklist elements
+        // Freeing the blocklist's elements
         int i = 0;
         while(blockList[i] != NULL) {
             free(blockList[i]);
@@ -103,10 +99,11 @@ int main(int argc, char **argv){
 
 
 /* 
- * read_blocklist - Read from file to create a simple firewall 
- * that prevents access to certain sites.
+ * read_blocklist - Reads the "blocklist" file if it exists and loads it into
+ *                  the blocklist string array
  */
 void read_blocklist() {
+    // Attempting to open the blocklist file for reading
     char *path = "blocklist";
     FILE *fp = fopen(path, "r");
     if(fp == NULL) {
@@ -114,6 +111,7 @@ void read_blocklist() {
         return;
     }
 
+    // Allocating memory for the first line
     int num_lines = 1;
     blockList = malloc(sizeof(blockList[0]) * num_lines);
 
@@ -123,7 +121,7 @@ void read_blocklist() {
     while ((bytes_read = getline(&new_line, &str_len, fp)) != -1) {
         new_line[strcspn(new_line, "\n")] = 0;
 
-        // Resize the array we allocated on the heap
+        // Resize the array we allocated to allow for the next line
         void *ptr = realloc(blockList, (num_lines + 1) * sizeof(blockList[0]));
 
         // Check if the allocation was successful
@@ -133,11 +131,11 @@ void read_blocklist() {
           return;
         }
 
-        // Overwrite `blocklist` with the pointer to the new memory region only if realloc() was successful
+        // Overwrite blocklist with the pointer to the new memory region
         blockList = ptr;
 
-        // Allocate a copy on the heap
-        // so that the array elements don't all point to the same buffer
+        // Allocate a copy on the heap so that the array elements don't all
+        // point to the same buffer
         blockList[num_lines - 1] = strdup(new_line);
 
         // Keep track of the size of the array
@@ -152,12 +150,12 @@ void read_blocklist() {
 }
 
 /*
- * *thread - handles the connection after it is established.
- *
- * Given a connection from listenfd
+ * thread - Handles a client connection after it is established
  * 
  */
 void *thread(void *vargp) {
+    // Setting up the connection and freeing the memory of the pointer created
+    // in the main function that was used to prevent race conditions
     int connfd = *((int *)vargp);
     Pthread_detach(pthread_self());
     free(vargp);
@@ -271,9 +269,24 @@ void *thread(void *vargp) {
     while((n = rio_readn(requestfd, buf, MAXLINE)) > 0) {
         rLen += n;
         if(rio_writen(connfd, buf, strlen(buf)) != strlen(buf)) {
-            printf("Error sending response to client!\n");
+            if(errno == EPIPE) {
+                printf("Error sending response to client!\n");
+                close(requestfd);
+                close(connfd);
+                return;   
+            }
         }
         bzero(buf, MAXLINE);
+    }
+
+    // Checkign for ECONNRESET error and
+    if(n == -1) {
+        if(errno == ECONNRESET) {
+            printf("Connection closed by the host prematurely!\n");
+            close(requestfd);
+            close(connfd);
+            return;
+        }
     }
     int rSize = rLen * 8;
 
